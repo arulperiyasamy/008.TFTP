@@ -16,7 +16,7 @@
 void handle_client(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet);
 void respond_connreq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len);
 void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet);
-void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len);
+void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet);
 
 int main() 
 {
@@ -90,7 +90,7 @@ void handle_client(int sock_fd, struct sockaddr_in client_addr, socklen_t client
 	else if(opcode == WRQ)
 	{
 		printf("Recived write request from client...\n");
-		respond_wrq(sock_fd, client_addr, client_len);
+		respond_wrq(sock_fd, client_addr, client_len, packet);
 	}
 }
 
@@ -106,38 +106,43 @@ void respond_connreq(int sock_fd, struct sockaddr_in client_addr, socklen_t clie
 	sendto(sock_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *) &client_addr, client_len);
 	printf("ACK Packet sent to server...\n\n");
 }
+
 void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet)
 {
 	int fd;
 	fd = open(packet -> body.request.filename, O_RDONLY);
-
-	if(fd == -1)
-	{
-		printf("Requested file not found in the directory!\n\n");
-		return;
-	}
-	printf("Requested file found!\n");
+	
+	printf("Recived Data Transmission Mode:%s\n", mode_strings[packet->body.request.mode]);
 
 	/* Setting Error Packet */
-	tftp_packet err_packet;	
-
+	tftp_packet err_packet;		
 	err_packet.opcode = htons(ERROR);
-	strcpy(err_packet.body.error_packet.error_msg, "Requested file available in server");
+		
+	if(fd == -1)
+	{
+		printf("Requested file not available\n");
+		err_packet.body.error_packet.error_code = FILE_NOT_FOUND;
+		strcpy(err_packet.body.error_packet.error_msg, "Requested file not available in server");
+	}
+	else
+	{
+		printf("Requested file available\n");
+		err_packet.body.error_packet.error_code = FILE_FOUND;
+		strcpy(err_packet.body.error_packet.error_msg, "Requested file available in server");
+	}
 	printf("Error packet set\n");
 	sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
 	printf("Error Packet sent to client...\n\n");
-	
 
-	if( !strcmp("NORMAL", packet->body.request.mode) )
+	if(fd == -1)
+		return; 
+	else
 	{
-		
+		send_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
 	}
-
-
-
-	
 }
-void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len)
+void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet)
 {
-	;
+        int fd = open( packet -> body.request.filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        receive_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
 }

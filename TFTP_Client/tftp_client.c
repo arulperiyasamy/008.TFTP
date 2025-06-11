@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdio_ext.h>
 #include <netinet/in.h>  // For sockaddr_in
 #include <sys/socket.h>  // For socket functions and sockaddr
@@ -9,7 +10,7 @@
 #include "tftp.h"
 #include "tftp_client.h"
 
-char* mode = "NORMAL";
+Mode mode = OCTET;
 
 int main() 
 {
@@ -56,11 +57,24 @@ void process_command(tftp_client_t *client, char *command)
 		char f_name[40];
 		printf("Enter filename: \n");	
 		scanf("%[^\n]", f_name);
-	
+
 		/* Calling put_file() */
 		get_file(client, f_name);
 	}
-
+	else if(!strcmp("put", command))
+	{
+		char f_name[40];
+		printf("Enter filename: \n");
+		scanf("%[^\n]", f_name);
+		put_file(client, f_name);
+	}
+	else if(!strcmp("chmode", command))
+	{
+		char mode_str[10];
+		printf("Enter mode: \n");
+		scanf("%[^\n]", mode_str);
+		ch_mode(mode_str);
+	}
 	else if(!strcmp("exit", command) )
 	{
 		_exit(0);
@@ -82,18 +96,17 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	/* Create UDP socket */
 	create_socket(client);
 
-        if( (client -> sock_fd)  < 0)
-                return ;
+	if( (client -> sock_fd)  < 0)
+		return ;
 	else
 		printf("Socket created...\n");
-
 
 	/* Set socket timeout option */
 
 	/* Set up server address */
-        client->server_addr.sin_family = AF_INET;
-        client->server_addr.sin_port = htons(port); 
-        client->server_addr.sin_addr.s_addr = inet_addr(ip);
+	client->server_addr.sin_family = AF_INET;
+	client->server_addr.sin_port = htons(port); 
+	client->server_addr.sin_addr.s_addr = inet_addr(ip);
 	printf("Server address set...\n");
 
 	/* Set up connection packet */
@@ -110,7 +123,7 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	tftp_packet recv_packet;
 	socklen_t addr_len = sizeof(client->server_addr);
 	printf("Recieve packet set...\n");
-	
+
 	/* Recieve ack from server */
 	recvfrom((client -> sock_fd), &recv_packet, sizeof(recv_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 	printf("Recieved Packet from server...\n");
@@ -124,35 +137,106 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 
 void get_file(tftp_client_t *client, char *filename) 
 {
-        /* Set up RRQ packet */
-        tftp_packet packet;
-        memset(&packet, 0, sizeof(packet));
-        packet.opcode = htons(RRQ);    // Set opcode to Read request        
-        strcpy(packet.body.request.filename, filename);
-        strcpy(packet.body.request.mode, mode);
+	/* Set up RRQ packet */
+	tftp_packet rrq_packet;
+	memset(&rrq_packet, 0, sizeof(rrq_packet));
+	rrq_packet.opcode = htons(RRQ);    // Set opcode to Read request        
+	strcpy(rrq_packet.body.request.filename, filename);
+	rrq_packet.body.request.mode = mode;
 	printf("Read request packet set...\n");
-	
+
 	/* Send packet to server */
-        sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-        printf("Packet sent...\n");    
-	
+	sendto((client -> sock_fd), &rrq_packet, sizeof(rrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+	printf("Packet sent...\n");    
+
 	socklen_t addr_len = sizeof(client->server_addr);
 	/* Set up error packet to recieve */
-	memset(&packet, 0, sizeof(packet));
-	packet.opcode = htons(ERROR);    // Set opcode to Read request
+	tftp_packet err_packet;
+	memset(&err_packet, 0, sizeof(err_packet));
+	err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
 
 	/* Recieve error packet */
-	recvfrom((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
-	printf("**%s**\n", packet.body.error_packet.error_msg);
+	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 	printf("ERROR packet recieved from server\n\n");
+	printf("**%s**\n", err_packet.body.error_packet.error_msg);
+	if(err_packet.body.error_packet.error_code == FILE_NOT_FOUND)
+		return;
 
+	char choice;	
+	printf("Data Transfer Mode: %s\n", mode_strings[mode]);
+	printf("Do you want to continue to recieve data? Y/y\n");
+	scanf(" %c", &choice);
 
+	/* Set up connection packet */
+        tftp_packet packet;
+        memset(&packet, 0, sizeof(packet));
+        printf("Confirmation packet set...\n");
+
+	if(choice == 'Y' || choice == 'y')
+	{
+		printf("Client proceeded for transmission\n");
+		packet.opcode = htons(CONN);    // Set opcode to connect 
+        	sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+        	printf("Confirmation sent...\n");
+
+		int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		receive_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
+
+		printf("File Recieved Successfully\n");
+	}
+	else
+	{
+        	packet.opcode = htons(ERROR);    // Set opcode to connect        
+        	sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+		printf("Transmission Aborted\n");
+	}
 }
 
 void put_file(tftp_client_t *client, char *filename) 
 {
-	// Send RRQ and recive file 
+        /* Set up RRQ packet */
+        tftp_packet wrq_packet;
+        memset(&wrq_packet, 0, sizeof(wrq_packet));
+        wrq_packet.opcode = htons(WRQ);    // Set opcode to Write request        
+        strcpy(wrq_packet.body.request.filename, filename);
+        wrq_packet.body.request.mode = mode;
+        printf("Read request packet set...\n");
+
+        /* Send packet to server */
+        sendto((client -> sock_fd), &wrq_packet, sizeof(wrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+        printf("Packet sent...\n");    
+
+        socklen_t addr_len = sizeof(client->server_addr);
+        /* Set up error packet to recieve */
+        tftp_packet err_packet;
+        memset(&err_packet, 0, sizeof(err_packet));
+        err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
+
+        /* Recieve error packet */
+//        recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
+//        printf("ERROR packet recieved from server\n\n");
+//        printf("**%s**\n", err_packet.body.error_packet.error_msg);
+//        if(err_packet.body.error_packet.error_code == NOT_READY)
+//                return;
+	
+        int fd; 
+        fd = open(filename, O_RDONLY);
+	send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
 }
+
+void ch_mode(char* mode_str)
+{
+	if(!strcmp(mode_str, "normal"))
+		mode = NORMAL;
+	else if(!strcmp(mode_str, "octet"))
+		mode = OCTET;
+	else if(!strcmp(mode_str, "netascii"))
+		mode = NET_ASCII;
+	else
+		printf("Tnvalid option passed to chmode!\n");
+}
+
+
 
 void disconnect(tftp_client_t *client) 
 {
