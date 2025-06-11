@@ -133,9 +133,10 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	create_socket(client);
 
 	if( (client -> sock_fd)  < 0)
+	{	
+		printf("\x1b[31m<error>\x1b[0m Could not create socket");
 		return ;
-	else
-		printf("Socket created...\n");
+	}
 
 	/* Set socket timeout option */
         struct timeval timeout;
@@ -146,32 +147,27 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	client->server_addr.sin_family = AF_INET;
 	client->server_addr.sin_port = htons(port); 
 	client->server_addr.sin_addr.s_addr = inet_addr(ip);
-	printf("Server address set...\n");
 
 	/* Set up connection packet */
 	tftp_packet packet;
 	memset(&packet, 0, sizeof(packet));
 	packet.opcode = htons(CONN);	// Set opcode to connect	
-	printf("Connection packet set...\n");
 
 	/* Send packet to server */
 	sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-	printf("Packet sent...\n");	
 
 	/* Set up recieve packet */
 	tftp_packet recv_packet;
 	socklen_t addr_len = sizeof(client->server_addr);
-	printf("Recieve packet set...\n");
 
 	/* Recieve ack from server */
 	int n = recvfrom((client -> sock_fd), &recv_packet, sizeof(recv_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 	if( n < 0)
 	{
-		perror("Receive failed or timeout occurred");
+		perror("\x1b[31m<error>\x1b[0m Receive failed or timeout occurred");
 		printf("Check IP or Port number\n");
 		return;
 	}
-	printf("Recieved Packet from server...\n");
 
 	/* Ensure ACK is recieved */	
 	if(ntohs(recv_packet.opcode) == ACK)
@@ -189,7 +185,7 @@ void get_file(tftp_client_t *client, char *filename)
 	
 	if(fd == -1 && (errno != EEXIST))
 	{
-		printf("Error in file opening!\n");
+		printf("\x1b[31m<error>\x1b[0m Error in file opening!\n");
 		return;
 	}
 
@@ -200,11 +196,9 @@ void get_file(tftp_client_t *client, char *filename)
 	rrq_packet.opcode = htons(RRQ);    // Set opcode to Read request        
 	strcpy(rrq_packet.body.request.filename, filename);
 	rrq_packet.body.request.mode = mode;
-	printf("Read request packet set...\n");
 
 	/* Send packet to server */
 	sendto((client -> sock_fd), &rrq_packet, sizeof(rrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-	printf("Packet sent...\n");    
 
 	socklen_t addr_len = sizeof(client->server_addr);
 	/* Set up error packet to recieve */
@@ -214,29 +208,25 @@ void get_file(tftp_client_t *client, char *filename)
 
 	/* Recieve error packet */
 	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
-	printf("ERROR packet recieved from server\n\n");
 	printf("**%s**\n", err_packet.body.error_packet.error_msg);
 	if(err_packet.body.error_packet.error_code == FILE_NOT_FOUND)
 		return;
 
 	char choice;	
 	printf("Data Transfer Mode: %s\n", mode_strings[mode]);
-	printf("Do you want to continue to recieve data? Y/y\n");
+	printf("Do you want to continue to recieve data? [Y/y]:\n");
 	scanf(" %c", &choice);
 
 	/* Set up connection packet */
 	tftp_packet packet;
 	memset(&packet, 0, sizeof(packet));
-	printf("Confirmation packet set...\n");
 
 	if(choice == 'Y' || choice == 'y')
 	{
 		if( fd == -1 && (errno == EEXIST) )
 		{
-			printf("Conflict with existing file names\n");
-
 			char ch;
-			printf("Do you want to override existing file: Y/y\n");
+			printf("\x1b[31m<file_conflict>\x1b[0m Do you want to override existing file? [Y/y]:\n");
 			scanf(" %c", &ch);
 			if( ch == 'Y' || ch == 'y' )
 			{
@@ -248,13 +238,8 @@ void get_file(tftp_client_t *client, char *filename)
 				return;
 			}
 		}
-
-
-
-		printf("Client proceeded for transmission\n");
 		packet.opcode = htons(CONN);    // Set opcode to connect 
 		sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-		printf("Confirmation sent...\n");
 
 		receive_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
 	}
@@ -273,7 +258,7 @@ void put_file(tftp_client_t *client, char *filename)
 	fd = open(filename, O_RDONLY);
 	if(fd < 0)
 	{
-		printf("File not availabe\n");
+		printf("\x1b[31m<error>\x1b[0m File not availabe!\n");
 		return;
 	}
 
@@ -283,11 +268,9 @@ void put_file(tftp_client_t *client, char *filename)
 	wrq_packet.opcode = htons(WRQ);    // Set opcode to Write request        
 	strcpy(wrq_packet.body.request.filename, filename);
 	wrq_packet.body.request.mode = mode;
-	printf("Read request packet set...\n");
 
 	/* Send packet to server */
 	sendto((client -> sock_fd), &wrq_packet, sizeof(wrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-	printf("Packet sent...\n");    
 
 	socklen_t addr_len = sizeof(client->server_addr);
 	/* Set up error packet to recieve */
@@ -297,23 +280,19 @@ void put_file(tftp_client_t *client, char *filename)
 
 	/* Recieve error packet */
 	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
-	printf("ERROR packet recieved from server\n\n");
-	printf("**%s**\n", err_packet.body.error_packet.error_msg);
 	if(err_packet.body.error_packet.error_code == FOPEN_ERROR)
 	{
-		printf("File Transfer Failed\n");
+		printf("\x1b[31m<error>\x1b[0m File Transfer Failed\n");
 		printf("%s\n",err_packet.body.error_packet.error_msg);
 	}
 	else if(err_packet.body.error_packet.error_code == F_CONFLICT)
 	{
 		tftp_packet err_packet;
-
-		printf("%s\n",err_packet.body.error_packet.error_msg);
 		tftp_packet ack_packet;
 		memset(&ack_packet, 0, sizeof(ack_packet));
 
 		char ch;
-		printf("Do you want to override the file in server Y/y:\n");
+		printf("\x1b[31m<file_conflict>\x1b[0m Do you want to override the file in server [Y/y]:\n");
 		scanf(" %c", &ch);
 		if(ch == 'y' || ch == 'Y')
 		{
@@ -324,19 +303,20 @@ void put_file(tftp_client_t *client, char *filename)
 			ack_packet.body.ack_packet.block_number = O_RIDE_NO;
 		}
 		sendto((client -> sock_fd), &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-		printf("Client choice sent to server...\n");
 
 		if(ch == 'y' || ch == 'Y')
 		{	
 			memset(&err_packet, 0, sizeof(err_packet));
 			err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
 			recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
-			printf("ERROR packet recieved from server\n\n");
-			printf("**%s**\n", err_packet.body.error_packet.error_msg);
 
 			if(err_packet.body.error_packet.error_code != FOPEN_ERROR)
 			{
 				send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
+			}
+			else
+			{
+				printf("\x1b[31m<error>\x1b[0m %s\n", err_packet.body.error_packet.error_msg);
 			}
 		}
 	}
@@ -355,7 +335,7 @@ void ch_mode(char* mode_str)
 	else if(!strcmp(mode_str, "netascii"))
 		mode = NET_ASCII;
 	else
-		printf("Tnvalid option passed to chmode!\n");
+		printf("\x1b[31m<error>\x1b[0m Invalid option passed to chmode!\n");
 }
 
 

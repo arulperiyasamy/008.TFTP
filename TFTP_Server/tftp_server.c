@@ -139,6 +139,8 @@ void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 	sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
 	printf("Error Packet sent to client...\n\n");
 
+	
+
 	if(fd == -1)
 		return; 
 	else
@@ -163,7 +165,6 @@ void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
         }
 	else if( fd == -1 && (errno == EEXIST) )
 	{
-		printf("Conflict with existing files\n");
 		err_packet.body.error_packet.error_code = F_CONFLICT;
 		strcpy(err_packet.body.error_packet.error_msg, "Similar file exist in server");
 		sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
