@@ -47,7 +47,7 @@ void send_file(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len
 			}
 			else
 			{
-				printf("Block: [%d] recieved successfully\n",data.body.data_packet.block_number);
+				printf("ACK for Block: [%d] recieved [Transfer Success]\n",data.body.data_packet.block_number);
 				if(bytes_read < 512 )
 				{
 					printf("Sent last packet\n");
@@ -86,7 +86,7 @@ RESEND:				sendto(sock_fd, &data, sizeof(data), 0, (struct sockaddr *) &client_a
 				}
 				else
 				{
-					printf("Block: [%d] recieved successfully\n",data.body.data_packet.block_number++);
+					printf("ACK for Block: [%d] recieved [Transfer Success]\n",data.body.data_packet.block_number);
 					index = 0;
 					data.body.data_packet.block_number++;
 				}
@@ -116,7 +116,7 @@ RESEND:				sendto(sock_fd, &data, sizeof(data), 0, (struct sockaddr *) &client_a
 				}
 				else
 				{
-					printf("Block: [%d] received successfully\n", data.body.data_packet.block_number);
+					printf("ACK for Block: [%d] recieved [Transfer Success]\n",data.body.data_packet.block_number);
 					data.body.data_packet.block_number++;
 					is_recieved = 1;
 				}

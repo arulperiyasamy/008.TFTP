@@ -77,19 +77,19 @@ void handle_client(int sock_fd, struct sockaddr_in client_addr, socklen_t client
 	// and call send_file or receive_file accordingly
 	if(opcode == CONN)
 	{
-		printf("Recived connection request from client...\n");
+		printf("==> Recived connection request from client\n");
 		respond_connreq(sock_fd, client_addr, client_len);
 	}
 
 	else if(opcode == RRQ)
 	{
-		printf("Recived read request from client...\n");
+		printf("==> Recived read request from client\n");
 		respond_rrq(sock_fd, client_addr, client_len, packet);
 	}
 
 	else if(opcode == WRQ)
 	{
-		printf("Recived write request from client...\n");
+		printf("==> Recived write request from client\n");
 		respond_wrq(sock_fd, client_addr, client_len, packet);
 	}
 }
@@ -116,6 +116,7 @@ void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 
 	/* Setting Error Packet */
 	tftp_packet err_packet;		
+	memset(&err_packet, 0, sizeof(err_packet));
 	err_packet.opcode = htons(ERROR);
 		
 	if(fd == -1)
@@ -143,6 +144,64 @@ void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 }
 void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet)
 {
-        int fd = open( packet -> body.request.filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        receive_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
+	tftp_packet err_packet;
+	memset(&err_packet, 0, sizeof(err_packet));
+	err_packet.opcode = htons(ERROR);
+
+        int fd;
+        fd = open( packet->body.request.filename, O_CREAT | O_EXCL | O_WRONLY);
+        if( fd == -1 && (errno != EEXIST) )
+        {
+                printf("Error in creating fd\n");
+	        err_packet.body.error_packet.error_code = FOPEN_ERROR;
+	        strcpy(err_packet.body.error_packet.error_msg, "Error in creating fd in server"); 
+		sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
+        }
+	else if( fd == -1 && (errno == EEXIST) )
+	{
+		printf("Conflict with existing files\n");
+		err_packet.body.error_packet.error_code = F_CONFLICT;
+		strcpy(err_packet.body.error_packet.error_msg, "Similar file exist in server");
+		sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
+
+		tftp_packet ack_packet;
+		printf("Waiting for client choice to override file\n");
+		recvfrom(sock_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *)&client_addr, &client_len);		
+		
+		if(ack_packet.body.ack_packet.block_number == O_RIDE_NO)
+		{
+			printf("Override not approved\n");
+			printf("File Transfer Stopped\n");
+		}
+		if(ack_packet.body.ack_packet.block_number == O_RIDE_OK)
+		{
+			printf("Override approved\n");
+			fd = open(packet->body.request.filename, O_TRUNC | O_WRONLY );
+			
+			if(fd == -1)
+			{
+				err_packet.body.error_packet.error_code = FOPEN_ERROR;
+				strcpy(err_packet.body.error_packet.error_msg, "File Truncation failed");
+				sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
+			}
+			else
+			{
+				err_packet.body.error_packet.error_code = FOPEN_SUCCESS;
+				strcpy(err_packet.body.error_packet.error_msg, "File Truncation Success");
+				sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
+			
+				receive_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
+				printf("Override Done!\n");
+			}	
+		}
+	}
+	else
+	{
+		printf("No Conflict!\n");
+		err_packet.body.error_packet.error_code = FOPEN_SUCCESS;
+		strcpy(err_packet.body.error_packet.error_msg, "Creating fd in server success");
+		sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
+		printf("File Transfer Started\n");
+        	receive_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
+	}	
 }

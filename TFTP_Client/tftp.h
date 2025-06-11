@@ -11,10 +11,6 @@
 #define BUFFER_SIZE 516  // TFTP data packet size (512 bytes data + 4 bytes header)
 #define TIMEOUT_SEC 5    // Timeout in seconds
 
-
-#define FILE_NOT_FOUND 404
-#define FILE_FOUND 405
-
 #pragma pack(push, 1)
 
 // TFTP OpCodes
@@ -28,11 +24,24 @@ typedef enum
 	ERROR = 5 // Error Packet
 } tftp_opcode;
 
-typedef enum {
+typedef enum 
+{
         NORMAL,
         OCTET,
-        NET_ASCII,
+        NET_ASCII
 } Mode;
+
+typedef enum
+{
+	FILE_NOT_FOUND = 404,
+	FILE_FOUND,
+	FOPEN_ERROR,
+	FOPEN_SUCCESS,
+	F_CONFLICT,
+	O_RIDE_OK,
+	O_RIDE_NO
+} Ferror;
+
 
 // TFTP Packet Structure
 typedef struct 

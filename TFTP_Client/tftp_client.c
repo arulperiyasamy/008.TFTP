@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio_ext.h>
@@ -10,7 +11,8 @@
 #include "tftp.h"
 #include "tftp_client.h"
 
-Mode mode = OCTET;
+// setting default mode
+Mode mode = NORMAL;
 
 int main() 
 {
@@ -35,49 +37,81 @@ int main()
 }
 
 // Function to process commands
-void process_command(tftp_client_t *client, char *command) 
+void process_command(tftp_client_t *client, char *input_str) 
 {
-	if(!strcmp("connect", command))
+
+	int port = 6969;
+
+	//	char command[20];
+	//	char ip_str[16];
+	char* cmd = strtok(input_str, " ");
+	char* opt = strtok(NULL, " ");
+
+	if(!strcmp("connect", cmd))
 	{
-		int port = 6969;
-		char ip_str[16];
-		printf("Enter IP: \n");
-		scanf("%[^\n]", ip_str);
-		if(isvalid_ipv4(ip_str))
+		if(opt == NULL)
 		{
-			printf("IP Validated!!\n");
-			connect_to_server(client, ip_str, port);
+			printf("No options[ipv4] passed for connect!\n");
+		}
+
+		else
+		{
+			if(isvalid_ipv4(opt))
+			{
+				printf("IP Validated!!\n");
+				connect_to_server(client, opt, port);
+			}
+			else
+			{
+				printf("Invalid IP!\n");
+			}
+		}
+	}
+	else if(!strcmp("get", cmd))
+	{
+		if(opt == NULL)
+		{
+			printf("No filename passed!\n");
 		}
 		else
-			printf("Invalid IP!\n");
+		{
+			get_file(client, opt);
+		}
 	}
-	else if(!strcmp("get", command))
+	else if(!strcmp("put", cmd))
 	{
-		/* Input file name */
-		char f_name[40];
-		printf("Enter filename: \n");	
-		scanf("%[^\n]", f_name);
+		if(opt == NULL)
+		{   
+			printf("No filename passed!\n");
+		}   
+		else
+		{
+			put_file(client, opt);
+		}	
+	}
+	else if(!strcmp("chmode", cmd))
+	{
+		if(opt == NULL)
+		{   
+			printf("No options[mode] passed!\n");
+		}   
+		else
+		{
+			ch_mode( opt);
+		}
 
-		/* Calling put_file() */
-		get_file(client, f_name);
 	}
-	else if(!strcmp("put", command))
+	else if(!strcmp("ckmode", cmd) || !strcmp("mode", cmd))
 	{
-		char f_name[40];
-		printf("Enter filename: \n");
-		scanf("%[^\n]", f_name);
-		put_file(client, f_name);
+		printf("Current file transfer mode: %s\n", mode_strings[mode]);
 	}
-	else if(!strcmp("chmode", command))
-	{
-		char mode_str[10];
-		printf("Enter mode: \n");
-		scanf("%[^\n]", mode_str);
-		ch_mode(mode_str);
-	}
-	else if(!strcmp("exit", command) )
+	else if(!strcmp("exit", cmd) )
 	{
 		_exit(0);
+	}
+	else
+	{
+		printf("Invalid command!\n");
 	}
 }
 
@@ -137,6 +171,17 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 
 void get_file(tftp_client_t *client, char *filename) 
 {
+
+	int fd;
+	fd = open(filename, O_CREAT | O_EXCL | O_WRONLY);
+	
+	if(fd == -1 && (errno != EEXIST))
+	{
+		printf("Error in file opening!\n");
+		return;
+	}
+
+
 	/* Set up RRQ packet */
 	tftp_packet rrq_packet;
 	memset(&rrq_packet, 0, sizeof(rrq_packet));
@@ -168,60 +213,125 @@ void get_file(tftp_client_t *client, char *filename)
 	scanf(" %c", &choice);
 
 	/* Set up connection packet */
-        tftp_packet packet;
-        memset(&packet, 0, sizeof(packet));
-        printf("Confirmation packet set...\n");
+	tftp_packet packet;
+	memset(&packet, 0, sizeof(packet));
+	printf("Confirmation packet set...\n");
 
 	if(choice == 'Y' || choice == 'y')
 	{
+		if( fd == -1 && (errno == EEXIST) )
+		{
+			printf("Conflict with existing file names\n");
+
+			char ch;
+			printf("Do you want to override existing file: Y/y\n");
+			scanf(" %c", &ch);
+			if( ch == 'Y' || ch == 'y' )
+			{
+				fd = open(filename, O_TRUNC | O_WRONLY );
+			}
+			else
+			{
+				printf("File transfer aborted\n");
+				return;
+			}
+		}
+
+
+
 		printf("Client proceeded for transmission\n");
 		packet.opcode = htons(CONN);    // Set opcode to connect 
-        	sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-        	printf("Confirmation sent...\n");
+		sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+		printf("Confirmation sent...\n");
 
-		int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		receive_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
-
-		printf("File Recieved Successfully\n");
 	}
 	else
 	{
-        	packet.opcode = htons(ERROR);    // Set opcode to connect        
-        	sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+		packet.opcode = htons(ERROR);    // Set opcode to connect        
+		sendto((client -> sock_fd), &packet, sizeof(packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
 		printf("Transmission Aborted\n");
 	}
-}
 
+
+}
 void put_file(tftp_client_t *client, char *filename) 
 {
-        /* Set up RRQ packet */
-        tftp_packet wrq_packet;
-        memset(&wrq_packet, 0, sizeof(wrq_packet));
-        wrq_packet.opcode = htons(WRQ);    // Set opcode to Write request        
-        strcpy(wrq_packet.body.request.filename, filename);
-        wrq_packet.body.request.mode = mode;
-        printf("Read request packet set...\n");
+	int fd; 
+	fd = open(filename, O_RDONLY);
+	if(fd < 0)
+	{
+		printf("File not availabe\n");
+		return;
+	}
 
-        /* Send packet to server */
-        sendto((client -> sock_fd), &wrq_packet, sizeof(wrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
-        printf("Packet sent...\n");    
+	/* Set up RRQ packet */
+	tftp_packet wrq_packet;
+	memset(&wrq_packet, 0, sizeof(wrq_packet));
+	wrq_packet.opcode = htons(WRQ);    // Set opcode to Write request        
+	strcpy(wrq_packet.body.request.filename, filename);
+	wrq_packet.body.request.mode = mode;
+	printf("Read request packet set...\n");
 
-        socklen_t addr_len = sizeof(client->server_addr);
-        /* Set up error packet to recieve */
-        tftp_packet err_packet;
-        memset(&err_packet, 0, sizeof(err_packet));
-        err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
+	/* Send packet to server */
+	sendto((client -> sock_fd), &wrq_packet, sizeof(wrq_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+	printf("Packet sent...\n");    
 
-        /* Recieve error packet */
-//        recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
-//        printf("ERROR packet recieved from server\n\n");
-//        printf("**%s**\n", err_packet.body.error_packet.error_msg);
-//        if(err_packet.body.error_packet.error_code == NOT_READY)
-//                return;
-	
-        int fd; 
-        fd = open(filename, O_RDONLY);
-	send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
+	socklen_t addr_len = sizeof(client->server_addr);
+	/* Set up error packet to recieve */
+	tftp_packet err_packet;
+	memset(&err_packet, 0, sizeof(err_packet));
+	err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
+
+	/* Recieve error packet */
+	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
+	printf("ERROR packet recieved from server\n\n");
+	printf("**%s**\n", err_packet.body.error_packet.error_msg);
+	if(err_packet.body.error_packet.error_code == FOPEN_ERROR)
+	{
+		printf("File Transfer Failed\n");
+		printf("%s\n",err_packet.body.error_packet.error_msg);
+	}
+	else if(err_packet.body.error_packet.error_code == F_CONFLICT)
+	{
+		tftp_packet err_packet;
+
+		printf("%s\n",err_packet.body.error_packet.error_msg);
+		tftp_packet ack_packet;
+		memset(&ack_packet, 0, sizeof(ack_packet));
+
+		char ch;
+		printf("Do you want to override the file in server Y/y:\n");
+		scanf(" %c", &ch);
+		if(ch == 'y' || ch == 'Y')
+		{
+			ack_packet.body.ack_packet.block_number = O_RIDE_OK;
+		}
+		else
+		{
+			ack_packet.body.ack_packet.block_number = O_RIDE_NO;
+		}
+		sendto((client -> sock_fd), &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
+		printf("Client choice sent to server...\n");
+
+		if(ch == 'y' || ch == 'Y')
+		{	
+			memset(&err_packet, 0, sizeof(err_packet));
+			err_packet.opcode = htons(ERROR);    // Set opcode to ERROR
+			recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
+			printf("ERROR packet recieved from server\n\n");
+			printf("**%s**\n", err_packet.body.error_packet.error_msg);
+
+			if(err_packet.body.error_packet.error_code != FOPEN_ERROR)
+			{
+				send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
+			}
+		}
+	}
+	else if( err_packet.body.error_packet.error_code == FOPEN_SUCCESS )
+	{
+		send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
+	}
 }
 
 void ch_mode(char* mode_str)

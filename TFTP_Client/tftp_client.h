@@ -18,6 +18,7 @@ void connect_to_server(tftp_client_t *client, char *ip, int port);
 void put_file(tftp_client_t *client, char *filename);
 void get_file(tftp_client_t *client, char *filename);
 void disconnect(tftp_client_t *client);
+char* get_command(char* input_string);
 void process_command(tftp_client_t *client, char *command);
 
 void ch_mode(char* mode_str);
