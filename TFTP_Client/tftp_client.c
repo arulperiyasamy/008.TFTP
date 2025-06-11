@@ -23,7 +23,7 @@ int main()
 	// Main loop for command-line interface
 	while (1) 
 	{
-		printf("\x1b[31mtftp>\x1b[0m ");
+		printf("\x1b[32mtftp>\x1b[0m ");
 		__fpurge(stdin);
 		fgets(command, sizeof(command), stdin);
 
@@ -31,6 +31,7 @@ int main()
 		command[strcspn(command, "\n")] = 0;
 
 		// Process the command
+		// If connect is done
 		process_command(&client, command);
 	}
 	return 0;
@@ -39,31 +40,32 @@ int main()
 // Function to process commands
 void process_command(tftp_client_t *client, char *input_str) 
 {
-
-	int port = 6969;
-
-	//	char command[20];
-	//	char ip_str[16];
 	char* cmd = strtok(input_str, " ");
 	char* opt = strtok(NULL, " ");
+	char* opt2 = strtok(NULL, " ");
+
+	if( (client->conn_stat == 0) && strcmp(cmd,"connect") )
+	{
+		printf("\x1b[31m<error>\x1b[0m Server not connected yet!\n");
+		return;
+	}
 
 	if(!strcmp("connect", cmd))
 	{
-		if(opt == NULL)
+		if(opt == NULL || opt2 == NULL)
 		{
-			printf("No options[ipv4] passed for connect!\n");
+			printf("\x1b[31m<error>\x1b[0m Too few args. passed for connect!\n");
 		}
 
 		else
 		{
 			if(isvalid_ipv4(opt))
 			{
-				printf("IP Validated!!\n");
-				connect_to_server(client, opt, port);
+				connect_to_server(client, opt, atoi(opt2));
 			}
 			else
 			{
-				printf("Invalid IP!\n");
+				printf("\x1b[31m<error>\x1b[0m Invalid IP!\n");
 			}
 		}
 	}
@@ -71,7 +73,7 @@ void process_command(tftp_client_t *client, char *input_str)
 	{
 		if(opt == NULL)
 		{
-			printf("No filename passed!\n");
+			printf("\x1b[31m<error>\x1b[0m No filename passed!\n");
 		}
 		else
 		{
@@ -82,7 +84,7 @@ void process_command(tftp_client_t *client, char *input_str)
 	{
 		if(opt == NULL)
 		{   
-			printf("No filename passed!\n");
+			printf("\x1b[31m<error>\x1b[0m No filename passed!\n");
 		}   
 		else
 		{
@@ -93,7 +95,7 @@ void process_command(tftp_client_t *client, char *input_str)
 	{
 		if(opt == NULL)
 		{   
-			printf("No options[mode] passed!\n");
+			printf("\x1b[31m<error>\x1b[0m No options[mode] passed!\n");
 		}   
 		else
 		{
@@ -136,6 +138,9 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 		printf("Socket created...\n");
 
 	/* Set socket timeout option */
+        struct timeval timeout;
+        timeout.tv_sec = TIMEOUT_SEC; 
+        setsockopt(client -> sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
 	/* Set up server address */
 	client->server_addr.sin_family = AF_INET;
@@ -159,19 +164,26 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	printf("Recieve packet set...\n");
 
 	/* Recieve ack from server */
-	recvfrom((client -> sock_fd), &recv_packet, sizeof(recv_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
+	int n = recvfrom((client -> sock_fd), &recv_packet, sizeof(recv_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
+	if( n < 0)
+	{
+		perror("Receive failed or timeout occurred");
+		printf("Check IP or Port number\n");
+		return;
+	}
 	printf("Recieved Packet from server...\n");
 
 	/* Ensure ACK is recieved */	
 	if(ntohs(recv_packet.opcode) == ACK)
-		printf("Server Available!\n\n");
-
+	{
+		printf("Server Available!\n");
+		client->conn_stat = 1;
+	}
 	return;
 }
 
 void get_file(tftp_client_t *client, char *filename) 
 {
-
 	int fd;
 	fd = open(filename, O_CREAT | O_EXCL | O_WRONLY);
 	

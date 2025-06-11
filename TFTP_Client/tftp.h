@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 
-#define PORT 6969
 #define BUFFER_SIZE 516  // TFTP data packet size (512 bytes data + 4 bytes header)
 #define TIMEOUT_SEC 5    // Timeout in seconds
 

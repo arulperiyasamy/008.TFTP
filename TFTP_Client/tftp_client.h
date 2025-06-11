@@ -7,6 +7,7 @@ typedef struct
 	struct sockaddr_in server_addr;
 	socklen_t server_len;
 	char server_ip[INET_ADDRSTRLEN];
+	int conn_stat;
 } tftp_client_t;
 
 // Function prototypes

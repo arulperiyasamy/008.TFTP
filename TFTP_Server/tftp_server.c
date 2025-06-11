@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SERVER_PORT 6969
+#define SERVER_PORT 7777
 
 void handle_client(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet);
 void respond_connreq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len);
@@ -33,9 +33,6 @@ int main()
 	}
 	printf("Socket created...\n");
 
-	// Set socket timeout option
-	//TODO Use setsockopt() to set timeout option
-
 	// Set up server address
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -51,7 +48,14 @@ int main()
 	}
 	printf("Socket bind with server...\n");
 
-	printf("TFTP Server listening on port %d...\n\n", PORT);
+        // Set socket timeout option
+        //TODO Use setsockopt() to set timeout option
+
+        struct timeval timeout;
+        timeout.tv_sec = 30; 
+        setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+	printf("TFTP Server listening on port %d...\n\n", SERVER_PORT);
 
 	// Main loop to handle incoming requests
 	while (1) 
@@ -60,7 +64,7 @@ int main()
 		if (n < 0) 
 		{
 			perror("Receive failed or timeout occurred");
-			continue;
+			break;
 		}
 		handle_client(sock_fd, client_addr, client_len, &packet);
 	}
