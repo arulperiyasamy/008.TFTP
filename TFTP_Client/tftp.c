@@ -88,15 +88,17 @@ void send_file(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len
 		printf("\x1b[31m<info>\x1b[0m File sent succesfully\n");
 	}
 
+	/* If requested ftp mode is octet */
 	else if(mode == OCTET)
 	{
-		int bytes_read;
-		char ch;
+		int bytes_read;		// Variable stores bytes read from fd
+		char ch;		// Variable used as buffer
 		while(1)
 		{
-			bytes_read = read(fd, &ch, 1);
+			bytes_read = read(fd, &ch, 1);		// Read byte by byte
 			send_buffer(sock_fd, client_addr, client_len, &ch, bytes_read, block_no);
-			block_no++;
+			block_no++;				// Increment block number after sending each byte
+			/* loop breaks if eof is reached */
 			if(bytes_read == 0)
 				break;
 		}
@@ -104,90 +106,74 @@ void send_file(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len
 	}
 }
 
+/* This function send file to requested device server ---> client (or) client ---> server */
+/* Trasmission follows ftp_mode requested by device */
 void receive_file(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, int fd, int mode) 
 {
-	tftp_packet data; memset(&data, 0, sizeof(data));
-	tftp_packet ack; memset(&ack, 0, sizeof(ack));
-	ack.opcode = ACK;
+	/* Set up ack and data packet */
+	tftp_packet data; memset(&data, 0, sizeof(data)); data.opcode = htons(DATA);
+	tftp_packet ack; memset(&ack, 0, sizeof(ack)); ack.opcode = htons(ACK);
 
-	int bytes_received = sizeof(data);
+	int bytes_received;
 	int is_recieved = 1;
+	int max_bytes;
 
 	if (mode == NORMAL || mode == NET_ASCII)
-	{
-		while(1)
-		{
-			bytes_received = recvfrom(sock_fd, &data, sizeof(data), 0, (struct sockaddr *)&client_addr, &client_len);
-			if(bytes_received == sizeof(data))
-			{
-				ack.body.ack_packet.block_number = data.body.data_packet.block_number;
-				sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
-				write(fd, data.body.data_packet.data, data.body.data_packet.size );
-			}	
-			else
-			{
-				ack.body.ack_packet.block_number = -1;
-				sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
-			}
+		max_bytes = 512;
+	else if (mode == OCTET)
+		max_bytes = 1;
 
-			if( data.body.data_packet.size < 512 )
-			{
-				printf("\x1b[31m<info>\x1b[0m File Recieved\n");
-				break;
-			}
+	/* Same recive mechanism */
+	while(1)
+	{
+		bytes_received = recvfrom(sock_fd, &data, sizeof(data), 0, (struct sockaddr *)&client_addr, &client_len);
+		/* Check if the bytes recived is the size of packet */
+		if(bytes_received == sizeof(data))
+		{
+			/* Send block numver in ack packet if the packet recieved correctly */
+			ack.body.ack_packet.block_number = data.body.data_packet.block_number;
+			sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
+			write(fd, data.body.data_packet.data, data.body.data_packet.size );
+		}	
+		else
+		{
+			/* Send ack with -1 if packet not recived corretly */
+			ack.body.ack_packet.block_number = -1;
+			sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
+		}
+
+		/* Break loop is last packet recieved i.e.size < max_bytes */
+		if( data.body.data_packet.size < max_bytes )
+		{
+			printf("\x1b[31m<info>\x1b[0m File Recieved\n");
+			break;
 		}
 	}
-
-	else if(mode == OCTET)
-	{
-		while(1)
-		{
-			bytes_received = recvfrom(sock_fd, &data, sizeof(data), 0, (struct sockaddr *)&client_addr, &client_len);
-			if(bytes_received < sizeof(data))
-			{
-				ack.body.ack_packet.block_number = -1;
-				sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
-			}
-			else
-			{	
-				ack.body.ack_packet.block_number = data.body.data_packet.block_number;
-				sendto(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, client_len);
-				write(fd, data.body.data_packet.data, 1 );
-			}
-
-			if(data.body.data_packet.size == 0)
-			{
-				
-				printf("\x1b[31m<info>\x1b[0m File Recieved\n");
-				break;
-			}
-		}
-	}
-
 }
 
 void send_buffer(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, char* buffer, int size, int block_no)
 {
-	tftp_packet data;
-        tftp_packet ack;
-        memset(&data, 0, sizeof(data));
-        memset(&ack, 0, sizeof(ack));
-        data.opcode = htons(DATA);
-        ack.opcode = htons(ACK);
+	/* set up data & ack packet*/
+	tftp_packet data; memset(&data, 0, sizeof(data)); data.opcode = htons(DATA);
+	tftp_packet ack; memset(&ack, 0, sizeof(ack)); ack.opcode = htons(ACK);
 
-	int ack_flag = 0;
-	data.body.data_packet.size = size;
-	data.body.data_packet.block_number = block_no;
-	strcpy(data.body.data_packet.data, buffer);
+	int ack_flag = 0;					// flag used to store ack status init to 0 ensure 1st iteration
+	data.body.data_packet.size = size;			// send size of data to be written by buffer in reciver
+	data.body.data_packet.block_number = block_no;		// store block number in packet
+	strcpy(data.body.data_packet.data, buffer);		// copy buffer to the packet
 
+	/* Loop retransmits untill ack is successful */	
 	while(ack_flag == 0)
 	{
+		/* Send data and recive ack for the particular packet */
 		sendto(sock_fd, &data, sizeof(data), 0, (struct sockaddr *) &client_addr, client_len);
 		recvfrom(sock_fd, &ack, sizeof(ack), 0, (struct sockaddr *)&client_addr, &client_len);
+		/* If packet not received correctly loop continue */
 		if(ack.body.ack_packet.block_number == -1) 
 		{   
 			printf("Packet not recieved correctly\n");
 		}   
+		/* If packet recived correctly flag set to 1 thus loop ends (no resend) */
 		else
 		{
 			printf("ACK for Block: [%d] recieved [Transfer Success]\n",data.body.data_packet.block_number);
