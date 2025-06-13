@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 
-#define PORT 6969
 #define BUFFER_SIZE 516  // TFTP data packet size (512 bytes data + 4 bytes header)
 #define TIMEOUT_SEC 5    // Timeout in seconds
 
@@ -84,5 +83,6 @@ extern const char mode_strings[3][20];
 
 void send_file(int sockfd, struct sockaddr_in client_addr, socklen_t client_len, int fd, int mode);
 void receive_file(int sockfd, struct sockaddr_in client_addr, socklen_t client_len, int fd, int mode);
+void send_buffer(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, char* buffer, int size, int block_no);
 
 #endif // TFTP_H

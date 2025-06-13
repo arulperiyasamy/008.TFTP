@@ -48,24 +48,13 @@ int main()
 	}
 	printf("Socket bind with server...\n");
 
-        // Set socket timeout option
-        //TODO Use setsockopt() to set timeout option
-
-        struct timeval timeout;
-        timeout.tv_sec = 30; 
-        setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-
-	printf("TFTP Server listening on port %d...\n\n", SERVER_PORT);
+	printf("TFTP Server listening on \x1b[32mPORT %d\x1b[0m\n", SERVER_PORT);
 
 	// Main loop to handle incoming requests
 	while (1) 
 	{
-		int n = recvfrom(sock_fd, &packet, sizeof(packet), 0, (struct sockaddr *)&client_addr, &client_len);
-		if (n < 0) 
-		{
-			perror("Receive failed or timeout occurred");
-			break;
-		}
+		recvfrom(sock_fd, &packet, sizeof(packet), 0, (struct sockaddr *)&client_addr, &client_len);
+		
 		handle_client(sock_fd, client_addr, client_len, &packet);
 	}
 
@@ -81,19 +70,19 @@ void handle_client(int sock_fd, struct sockaddr_in client_addr, socklen_t client
 	// and call send_file or receive_file accordingly
 	if(opcode == CONN)
 	{
-		printf("==> Recived connection request from client\n");
+		printf("\n\x1b[31m<request>\x1b[0m Recieved connection request from client\n");
 		respond_connreq(sock_fd, client_addr, client_len);
 	}
 
 	else if(opcode == RRQ)
 	{
-		printf("==> Recived read request from client\n");
+		printf("\n\x1b[31m<request>\x1b[0m Recieved read request from client\n");
 		respond_rrq(sock_fd, client_addr, client_len, packet);
 	}
 
 	else if(opcode == WRQ)
 	{
-		printf("==> Recived write request from client\n");
+		printf("\n\x1b[31m<request>\x1b[0m Recieved write request from client\n");
 		respond_wrq(sock_fd, client_addr, client_len, packet);
 	}
 }
@@ -108,7 +97,7 @@ void respond_connreq(int sock_fd, struct sockaddr_in client_addr, socklen_t clie
 	printf("Set up ACK Packet...\n");
 
 	sendto(sock_fd, &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *) &client_addr, client_len);
-	printf("ACK Packet sent to server...\n\n");
+	printf("ACK Packet sent to server...\n");
 }
 
 void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet)
@@ -137,15 +126,21 @@ void respond_rrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 	}
 	printf("Error packet set\n");
 	sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
-	printf("Error Packet sent to client...\n\n");
-
-	
+	printf("Error Packet sent to client...\n");
 
 	if(fd == -1)
 		return; 
-	else
+
+	memset(&err_packet, 0, sizeof(err_packet));
+	recvfrom(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *)&client_addr, &client_len);		
+
+	if(err_packet.opcode == CONN)	
 	{
 		send_file(sock_fd, client_addr, client_len, fd, packet->body.request.mode);
+	}
+	else
+	{
+		printf("File Transfer Stopped by client!\n");
 	}
 }
 void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_len, tftp_packet *packet)
@@ -155,10 +150,10 @@ void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 	err_packet.opcode = htons(ERROR);
 
         int fd;
-        fd = open( packet->body.request.filename, O_CREAT | O_EXCL | O_WRONLY);
+        fd = open( packet->body.request.filename, O_CREAT | O_EXCL | O_WRONLY, 0644);
         if( fd == -1 && (errno != EEXIST) )
         {
-                printf("Error in creating fd\n");
+                printf("\x1b[31m<error>\x1b[0m Can't create fd\n");
 	        err_packet.body.error_packet.error_code = FOPEN_ERROR;
 	        strcpy(err_packet.body.error_packet.error_msg, "Error in creating fd in server"); 
 		sendto(sock_fd, &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client_addr, client_len);
@@ -182,7 +177,7 @@ void respond_wrq(int sock_fd, struct sockaddr_in client_addr, socklen_t client_l
 		{
 			printf("Override approved\n");
 			fd = open(packet->body.request.filename, O_TRUNC | O_WRONLY );
-			
+		
 			if(fd == -1)
 			{
 				err_packet.body.error_packet.error_code = FOPEN_ERROR;

@@ -13,17 +13,16 @@ typedef struct
 // Function prototypes
 
 int isvalid_ipv4(char* ip_str);
-void create_socket(tftp_client_t *client);
+int isvalid_command(char* cmd);
 
+int create_socket(tftp_client_t *client);
 void connect_to_server(tftp_client_t *client, char *ip, int port);
 void put_file(tftp_client_t *client, char *filename);
 void get_file(tftp_client_t *client, char *filename);
 void disconnect(tftp_client_t *client);
-char* get_command(char* input_string);
-void process_command(tftp_client_t *client, char *command);
-
 void ch_mode(char* mode_str);
-void send_request(int sockfd, struct sockaddr_in server_addr, char *filename, int opcode);
-void receive_request(int sockfd, struct sockaddr_in server_addr, char *filename, int opcode);
+void display_man();
+
+void process_command(tftp_client_t *client, char *command);
 
 #endif
