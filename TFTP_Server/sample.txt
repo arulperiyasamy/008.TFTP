@@ -1,16 +1,16 @@
-Once upon a time in a quiet village nestled between rolling hills and ancient forests, there lived a man who believed that every machine had a soul. He wasn’t a poet, nor a philosopher. He was an engineer — one who listened to the soft hum of microcontrollers, the rhythm of UART transmissions, and the silent language of logic gates. While others heard noise in the digital world, he heard meaning.
-
-
-Each morning, he would walk to his small workshop, a space cluttered with wires, oscilloscopes, and memory chips. The smell of solder and old paper manuals filled the air. On the far wall, tacked beside a faded blueprint of an 8-bit processor, hung a handwritten quote: “Protocols are peace treaties — break them, and chaos follows.”
-
-
-He spent years working on forgotten machines — restoring old calculators, reprogramming 80s arcade boards, and debugging firmware so old it barely held together. But one day, he faced a challenge that tested everything he knew. A simple file transfer between two embedded systems had become a nightmare. Data was getting corrupted. Logs made no sense. The receiving end showed gibberish where there should have been clean text.
-
-
-Then it hit him — the systems spoke different dialects. One spoke in bare newlines, the other expected NetASCII. In a world where a lone line feed could bring down a system, understanding the rules of translation was everything. He dove into RFCs, parsed every byte, and eventually rewrote the transmission code by hand.
-
-
-When the transfer finally worked — every bit in place, every line ending respected — he didn’t celebrate. He simply nodded, updated his documentation, and scribbled another note on the wall: “Honor the standard, or prepare for pain.”
-
-
-That night, under the dim glow of his desk lamp, he closed his eyes and dreamed not of fame or success, but of clean compiles, stable links, and machines that listened!!!
+Once upon a time in a quiet village nestled between rolling hills and ancient forests, there lived a man who believed that every machine had a soul. He wasn’t a poet, nor a philosopher. He was an engineer — one who listened to the soft hum of microcontrollers, the rhythm of UART transmissions, and the silent language of logic gates. While others heard noise in the digital world, he heard meaning.
+
+
+Each morning, he would walk to his small workshop, a space cluttered with wires, oscilloscopes, and memory chips. The smell of solder and old paper manuals filled the air. On the far wall, tacked beside a faded blueprint of an 8-bit processor, hung a handwritten quote: “Protocols are peace treaties — break them, and chaos follows.”
+
+
+He spent years working on forgotten machines — restoring old calculators, reprogramming 80s arcade boards, and debugging firmware so old it barely held together. But one day, he faced a challenge that tested everything he knew. A simple file transfer between two embedded systems had become a nightmare. Data was getting corrupted. Logs made no sense. The receiving end showed gibberish where there should have been clean text.
+
+
+Then it hit him — the systems spoke different dialects. One spoke in bare newlines, the other expected NetASCII. In a world where a lone line feed could bring down a system, understanding the rules of translation was everything. He dove into RFCs, parsed every byte, and eventually rewrote the transmission code by hand.
+
+
+When the transfer finally worked — every bit in place, every line ending respected — he didn’t celebrate. He simply nodded, updated his documentation, and scribbled another note on the wall: “Honor the standard, or prepare for pain.”
+
+
+That night, under the dim glow of his desk lamp, he closed his eyes and dreamed not of fame or success, but of clean compiles, stable links, and machines that listened!!!

@@ -168,7 +168,7 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	int n = recvfrom((client -> sock_fd), &recv_packet, sizeof(recv_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 	if( n < 0)
 	{
-		client->conn_stat = 0;
+		client->conn_stat = 0;		// make connection status if timeout occurs
 		perror("\x1b[31m<error>\x1b[0m Receive failed or timeout occurred");
 		printf("Check IP or Port number\n");
 		return;
@@ -178,10 +178,11 @@ void connect_to_server(tftp_client_t *client, char *ip, int port)
 	if(ntohs(recv_packet.opcode) == ACK)
 	{
 		printf("\x1b[31m<info>\x1b[0m Server Available!\n");
-		client->conn_stat = 1;
+		client->conn_stat = 1;		// make connection status 1 if ack recieved
 	}
 	else
-		client->conn_stat = 0;
+		client->conn_stat = 0;		// make connection status 0 if ack not recieved
+
 	return;
 }
 
@@ -207,7 +208,7 @@ void get_file(tftp_client_t *client, char *filename)
 	/* Recieve error packet */
 	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 	printf("**%s**\n", err_packet.body.error_packet.error_msg);
-	if(err_packet.body.error_packet.error_code == FILE_NOT_FOUND)
+	if(err_packet.body.error_packet.error_code == ntohs(FILE_NOT_FOUND))
 		return;
 	
 	/* Set up connection packet */
@@ -291,13 +292,13 @@ void put_file(tftp_client_t *client, char *filename)
 	recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 
 	/* Prompt error message if error code is FOPEN_ERROR */
-	if(err_packet.body.error_packet.error_code == FOPEN_ERROR)
+	if(err_packet.body.error_packet.error_code == ntohs(FOPEN_ERROR))
 	{
 		printf("\x1b[31m<error>\x1b[0m File Transfer Failed\n");
 		printf("%s\n",err_packet.body.error_packet.error_msg);
 	}
 	/* Ask user choice if error code is F_CONFLICT */
-	else if(err_packet.body.error_packet.error_code == F_CONFLICT)
+	else if(err_packet.body.error_packet.error_code == ntohs(F_CONFLICT))
 	{
 		/* Set up error Packet and Ack Packet */
 		tftp_packet err_packet;
@@ -311,10 +312,10 @@ void put_file(tftp_client_t *client, char *filename)
 		printf("\x1b[31m<file_conflict>\x1b[0m Do you want to override the file in server [Y/y]: ");
 		scanf(" %c", &ch);
 		if(ch == 'y' || ch == 'Y')
-			ack_packet.body.ack_packet.block_number = O_RIDE_OK;	// Send user choice O_RIDE_OK to server
+			ack_packet.body.ack_packet.block_number = htonl(O_RIDE_OK);	// Send user choice O_RIDE_OK to server
 
 		else
-			ack_packet.body.ack_packet.block_number = O_RIDE_NO;	// Send user choice O_RIDE_NO to server
+			ack_packet.body.ack_packet.block_number = htonl(O_RIDE_NO);	// Send user choice O_RIDE_NO to server
 
 		sendto((client -> sock_fd), &ack_packet, sizeof(ack_packet), 0, (struct sockaddr *) &client->server_addr, sizeof(client->server_addr));
 
@@ -324,7 +325,7 @@ void put_file(tftp_client_t *client, char *filename)
 			recvfrom((client -> sock_fd), &err_packet, sizeof(err_packet), 0, (struct sockaddr *) &client->server_addr, &addr_len);
 
 			/* Send file if file opening is success */
-			if(err_packet.body.error_packet.error_code != FOPEN_ERROR)
+			if(err_packet.body.error_packet.error_code != ntohs(FOPEN_ERROR))
 			{
 				send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
 			}
@@ -336,7 +337,7 @@ void put_file(tftp_client_t *client, char *filename)
 		}
 	}
 	/* Continue to send file if no conflict */
-	else if( err_packet.body.error_packet.error_code == FOPEN_SUCCESS )
+	else if( err_packet.body.error_packet.error_code == ntohs(FOPEN_SUCCESS) )
 	{
 		send_file(client -> sock_fd, client->server_addr, sizeof(client->server_addr), fd, mode);
 	}
